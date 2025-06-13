@@ -2,21 +2,66 @@
 
 DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
 
-number=$1
-if [ -z "$number" ]; then
-  echo "Usage: $0 <number>"
-  exit 1
+usage() {
+    echo "Usage: $0 <owner/repo> <pr-number>"
+    echo "Example: $0 facebook/react 12345"
+    exit 1
+}
+
+if [ $# -ne 2 ]; then
+    usage
 fi
 
-rm -rf "$DIR/d-review"
-mkdir -p "$DIR/d-review"
+repo_path=$1
+pr_number=$2
 
-# Get the diff
-echo "Fetching PR #$number diff..."
-diff=$(gh pr diff $number)
+if [[ ! "$repo_path" =~ ^[^/]+/[^/]+$ ]]; then
+    echo "Error: Repository must be in 'owner/repo' format"
+    usage
+fi
+
+owner=$(echo "$repo_path" | cut -d'/' -f1)
+repo=$(echo "$repo_path" | cut -d'/' -f2)
+
+# Setup directories
+REPOS_DIR="$DIR/repos"
+REVIEWS_DIR="$DIR/reviews"
+REPO_DIR="$REPOS_DIR/$owner/$repo"
+REVIEW_DIR="$REVIEWS_DIR/${owner}-${repo}/pr-${pr_number}"
+
+# Create necessary directories
+mkdir -p "$REPO_DIR"
+mkdir -p "$REVIEW_DIR/files"
+
+# Clone or fetch the repository
+if [ ! -d "$REPO_DIR/.git" ]; then
+    echo "Cloning $repo_path..."
+    git clone "git@github.com:$repo_path.git" "$REPO_DIR"
+else
+    echo "Fetching latest changes for $repo_path..."
+    cd "$REPO_DIR"
+    git fetch --all
+fi
+
+# Change to repository directory
+cd "$REPO_DIR"
+
+# Clean previous review files
+rm -rf "$REVIEW_DIR"/*
+mkdir -p "$REVIEW_DIR/files"
+
+# Get the diff using gh CLI
+echo "Fetching PR #$pr_number diff..."
+diff=$(gh pr diff $pr_number)
+
+if [ -z "$diff" ]; then
+    echo "Error: Could not fetch diff for PR #$pr_number"
+    echo "Make sure you're authenticated with gh CLI and the PR exists"
+    exit 1
+fi
 
 # Save the complete diff
-echo "$diff" > "$DIR/d-review/summary.diff"
+echo "$diff" > "$REVIEW_DIR/raw.diff"
 
 # Split the diff into individual files
 echo "Splitting diff into individual files..."
@@ -37,11 +82,11 @@ while IFS= read -r line; do
             # Create directory structure
             file_dir=$(dirname "$current_file")
             if [[ "$file_dir" != "." ]]; then
-                mkdir -p "$DIR/d-review/$file_dir"
+                mkdir -p "$REVIEW_DIR/files/$file_dir"
             fi
             
             # Write content to file
-            echo "$current_content" > "$DIR/d-review/$current_file"
+            echo "$current_content" > "$REVIEW_DIR/files/${current_file}.diff"
             ((file_count++))
         fi
         
@@ -65,17 +110,53 @@ if [[ -n "$current_file" && -n "$current_content" ]]; then
     # Create directory structure
     file_dir=$(dirname "$current_file")
     if [[ "$file_dir" != "." ]]; then
-        mkdir -p "$DIR/d-review/$file_dir"
+        mkdir -p "$REVIEW_DIR/files/$file_dir"
     fi
     
     # Write content to file
-    echo "$current_content" > "$DIR/d-review/$current_file"
+    echo "$current_content" > "$REVIEW_DIR/files/${current_file}.diff"
     ((file_count++))
 fi
 
 # Clean up
 rm -f "$temp_file"
 
-echo "Done! Split $file_count files into individual diffs under $DIR/d-review/"
-echo "Summary diff is available at: $DIR/d-review/summary.diff"
+# Save PR metadata
+echo "Fetching PR metadata..."
+pr_data=$(gh pr view $pr_number --json title,author,createdAt,url,body,state,number,headRefName,baseRefName)
+echo "$pr_data" > "$REVIEW_DIR/pr-info.json"
 
+# Create PR summary
+echo "Creating PR summary..."
+pr_title=$(echo "$pr_data" | jq -r .title)
+pr_author=$(echo "$pr_data" | jq -r .author.login)
+pr_created=$(echo "$pr_data" | jq -r .createdAt)
+pr_url=$(echo "$pr_data" | jq -r .url)
+pr_state=$(echo "$pr_data" | jq -r .state)
+pr_head=$(echo "$pr_data" | jq -r .headRefName)
+pr_base=$(echo "$pr_data" | jq -r .baseRefName)
+
+cat > "$REVIEW_DIR/summary.txt" << EOF
+PR #$pr_number: $pr_title
+Repository: $repo_path
+Author: $pr_author
+State: $pr_state
+Branch: $pr_head -> $pr_base
+Created: $pr_created
+URL: $pr_url
+
+Files changed: $file_count
+Review generated: $(date)
+EOF
+
+echo "Done! Review files created:"
+echo "  Repository: $repo_path"
+echo "  PR: #$pr_number"
+echo "  Review location: $REVIEW_DIR"
+echo "  Total files: $file_count"
+echo ""
+echo "Files available at:"
+echo "  - Raw diff: $REVIEW_DIR/raw.diff"
+echo "  - Summary: $REVIEW_DIR/summary.txt"
+echo "  - Individual files: $REVIEW_DIR/files/"
+echo "  - PR info: $REVIEW_DIR/pr-info.json"
