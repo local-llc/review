@@ -52,7 +52,7 @@ mkdir -p "$REVIEW_DIR/files"
 # Clone or fetch the repository
 if [ ! -d "$REPO_DIR/.git" ]; then
     echo "Cloning $repo_path..."
-    git clone --depth 1 "git@github.com:$repo_path.git" "$REPO_DIR"
+    git clone "git@github.com:$repo_path.git" "$REPO_DIR"
 else
     echo "Fetching latest changes for $repo_path..."
     cd "$REPO_DIR"
@@ -61,6 +61,10 @@ fi
 
 # Change to repository directory
 cd "$REPO_DIR"
+
+# Fetch PR branch and checkout
+echo "Fetching PR branch..."
+gh pr checkout $pr_number
 
 # Clean previous review files
 rm -rf "$REVIEW_DIR"/*
