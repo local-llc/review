@@ -42,7 +42,62 @@ fi
 # Setup directories
 REPOS_DIR="$DIR/repos"
 REVIEWS_DIR="$DIR/reviews"
-REPO_DIR="$REPOS_DIR/$owner/$repo"
+LOCKS_DIR="$REPOS_DIR/locks"
+
+# Create locks directory if it doesn't exist
+mkdir -p "$LOCKS_DIR"
+
+# Function to find available repository number
+find_available_repo_number() {
+    local base_path="$REPOS_DIR/$owner"
+    local num=1
+    
+    while true; do
+        local repo_dir="$base_path/${repo}-${num}"
+        local lock_file="$LOCKS_DIR/${owner}-${repo}-${num}.lock"
+        
+        # Check if lock file exists and if the process is still running
+        if [ -f "$lock_file" ]; then
+            local pid=$(cat "$lock_file" | head -n1)
+            if kill -0 "$pid" 2>/dev/null; then
+                # Process is still running, try next number
+                ((num++))
+                continue
+            else
+                # Process is dead, clean up lock file
+                rm -f "$lock_file"
+            fi
+        fi
+        
+        # Found available number
+        echo $num
+        return
+    done
+}
+
+# Find available repository number
+echo "Finding available repository slot..."
+REPO_NUM=$(find_available_repo_number)
+REPO_DIR="$REPOS_DIR/$owner/${repo}-${REPO_NUM}"
+LOCK_FILE="$LOCKS_DIR/${owner}-${repo}-${REPO_NUM}.lock"
+
+echo "Using repository slot #$REPO_NUM: $REPO_DIR"
+
+# Create lock file with PID and PR number
+echo "$$" > "$LOCK_FILE"
+echo "PR: $pr_number" >> "$LOCK_FILE"
+echo "Started: $(date)" >> "$LOCK_FILE"
+
+# Setup trap to clean up lock file on exit
+cleanup() {
+    echo "\nCleaning up..."
+    rm -f "$LOCK_FILE"
+    echo "Lock file removed: $LOCK_FILE"
+    exit
+}
+
+trap cleanup EXIT INT TERM
+
 REVIEW_DIR="$REVIEWS_DIR/${owner}-${repo}/pr-${pr_number}"
 
 # Create necessary directories
