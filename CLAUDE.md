@@ -223,7 +223,7 @@ When you identify recurring patterns that warrant standardization, suggest addin
 ## Output
 
 ### Language
-Please provide output in English.
+Please provide output in Japanese.
 
 ### Consolidated Output Format
 
