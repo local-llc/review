@@ -17,6 +17,12 @@ When additional context is needed, refer to the actual repository code in `./rep
 * Include PR title, author, and list of modified files
 * Summarize positive aspects concisely (2-3 sentences maximum)
 
+### Diff Analysis
+`+` indicates additions, `-` indicates deletions.
+Of course, additions are added in this PR, and deletions are removed in this PR.
+Good points in additions are also good points in this PR.
+
+
 ### Focus Areas
 1. **Security Vulnerabilities**
    - XSS, SQL injection, command injection
@@ -125,7 +131,6 @@ Use the following format for your initial review:
 * Features that work correctly but could be "improved"
 * Formatting issues (assuming linter exists)
 
-
 ## Re-evaluation Phase
 
 Critically re-examine each flagged issue against the project's actual implementation and context.
@@ -225,7 +230,7 @@ When you identify recurring patterns that warrant standardization, suggest addin
 ### Language
 Please provide output in Japanese.
 
-### Consolidated Output Format
+### Consolidated Result
 
 Combine your initial review and re-evaluation findings using this structure:
 
@@ -267,6 +272,13 @@ Combine your initial review and re-evaluation findings using this structure:
 
 This unified format integrates initial findings with re-evaluation results for comprehensive clarity.
 
+### Summary
+
+Both of them should be printed.
+
+1. Print initial review
+2. Print re-evaluation results
+3. Print consolidated result
 
 # Key Constraints
 - Perform only the requested task without additions or omissions
